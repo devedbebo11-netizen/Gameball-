@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gravity Maze Prototype</title>
+    <style>
+        /* تصميم نظيف ومناسب للموبايل لمنع الـ Scrolling اللخبطة */
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0f172a;
+            color: #fff;
+            font-family: system-ui, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        canvas {
+            background: #1e293b;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border-radius: 12px;
+        }
+        #start-btn {
+            position: absolute;
+            z-index: 10;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+    </style>
+    <!-- استدعاء مكتبة الفيزياء Matter.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+</head>
+<body>
+
+    <button id="start-btn">ابدأ اللعب وتفعيل الحساسات</button>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const startBtn = document.getElementById('start-btn');
+        const canvas = document.getElementById('gameCanvas');
+        
+        // ضبط أبعاد الـ Canvas لتناسب شاشة الأيفون تماماً
+        canvas.width = window.innerWidth * 0.9;
+        canvas.height = window.innerHeight * 0.8;
+
+        // إعدادات مكتبة الفيزياء Matter.js
+        const { Engine, Render, Runner, Bodies, Composite, Vector } = Matter;
+        const engine = Engine.create();
+        const world = engine.world;
+
+        // إيقاف الجاذبية الافتراضية للأسفل لأننا هنتحكم فيها بالميل
+        engine.gravity.y = 0; 
+
+        const render = Render.create({
+            canvas: canvas,
+            engine: engine,
+            options: {
+                width: canvas.width,
+                height: canvas.height,
+                wireframes: false, // عشان تظهر الألوان الحقيقية مش الخطوط السلكية
+                background: '#1e293b'
+            }
+        });
+
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // 1. إضافة جدران المتاهة (حدود الشاشة)
+        const wallOptions = { isStatic: true, render: { fillStyle: '#475569' } };
+        const thickness = 20;
+        
+        const ground = Bodies.rectangle(canvas.width/2, canvas.height + thickness/2, canvas.width, thickness, wallOptions);
+        const ceiling = Bodies.rectangle(canvas.width/2, -thickness/2, canvas.width, thickness, wallOptions);
+        const leftWall = Bodies.rectangle(-thickness/2, canvas.height/2, thickness, canvas.height, wallOptions);
+        const rightWall = Bodies.rectangle(canvas.width + thickness/2, canvas.height/2, thickness, canvas.height, wallOptions);
+
+        // 2. إضافة عائق في النص كمثال
+        const obstacle = Bodies.rectangle(canvas.width / 2, canvas.height / 2, 150, 20, wallOptions);
+
+        // 3. إضافة الكرة اللي اللاعب بيتحكم فيها (بفيزياء مرنة)
+        const ball = Bodies.circle(canvas.width / 2, 50, 15, {
+            restitution: 0.6, // درجة الارتداد عند التصادم
+            friction: 0.05,
+            render: { fillStyle: '#38bdf8' }
+        });
+
+        // إضافة كل العناصر للعالم البصري
+        Composite.add(world, [ground, ceiling, leftWall, rightWall, obstacle, ball]);
+
+        // دالة التحكم عن طريق ميل الأيفون
+        function handleOrientation(event) {
+            // gamma: الميل يمين وشمال (-90 إلى 90)
+            // beta: الميل قدام وورا (-180 إلى 180)
+            let tiltX = event.gamma; 
+            let tiltY = event.beta;  
+
+            // تحويل الزوايا لقوة جاذبية متناسقة في اللعبة
+            engine.gravity.x = tiltX * 0.03;
+            engine.gravity.y = (tiltY - 45) * 0.03; // طرح 45 لأن المستخدم ماسك الموبايل بزاوية ميل مريحة مش مستقيم تماماً
+        }
+
+        // تفعيل اللعبة والطلب الآمن للحساسات على iOS
+        startBtn.addEventListener('click', () => {
+            startBtn.style.display = 'none';
+
+            // التأكد من دعم طلب الإذن (خاص بنظام iOS 13+)
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        } else {
+                            alert('علشان تلعب لازم توافق على تشغيل حساس الحركة!');
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // للأجهزة التانية اللي مش بتطلب إذن مسبق
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
+        });
+    </script>
+</body>
+</html>
